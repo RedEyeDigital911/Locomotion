@@ -49,8 +49,8 @@ private:
 	UPROPERTY( EditDefaultsOnly, Category = "LOCO|Input")
 	TObjectPtr<UInputAction> JogAction;
 	
-//	UPROPERTY( EditDefaultsOnly, Category = "CB|Input")
-//	TObjectPtr<UInputAction> DodgeAction;
+	UPROPERTY( EditDefaultsOnly, Category = "LOCO|Input")
+	TObjectPtr<UInputAction> DodgeAction;
 
 	UPROPERTY( EditDefaultsOnly, Category = "LOCO|Movement")
 	float WalkSpeed = 225.f; 
@@ -69,7 +69,7 @@ private:
 	void Input_JogStart();
 	void Input_JogEnd();
 	float GetWalkJogInputScale() const;
-	//void Input_Dodge();
+	void Input_Dodge();
 	
 
 };

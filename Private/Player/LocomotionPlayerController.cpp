@@ -44,7 +44,7 @@ void ALocomotionPlayerController::SetupInputComponent()
 	EnhancedInputComponent->BindAction(CrouchAction, ETriggerEvent::Started, this, &ThisClass::Input_Crouch);
 	EnhancedInputComponent->BindAction(JogAction, ETriggerEvent::Started, this, &ThisClass::Input_JogStart);
 	EnhancedInputComponent->BindAction(JogAction, ETriggerEvent::Completed, this, &ThisClass::Input_JogEnd);
-	//EnhancedInputComponent->BindAction(DodgeAction, ETriggerEvent::Completed, this, &ThisClass::Input_Dodge); 
+	EnhancedInputComponent->BindAction(DodgeAction, ETriggerEvent::Completed, this, &ThisClass::Input_Dodge); 
 
 }
 
@@ -138,3 +138,14 @@ float ALocomotionPlayerController::GetWalkJogInputScale() const
 
 	return FMath::Clamp(TargetSpeed / CMC->MaxWalkSpeed, 0.f, 1.f); 	// the target (walk or jog) as a fraction of the ceiling, kept between 0 and 1.
 }
+
+void ALocomotionPlayerController::Input_Dodge()
+{
+	if (!bPawnAlive) return; // no dodging when dead
+	ALocomotionCharacter* LOCOCharacter = Cast<ALocomotionCharacter>(GetCharacter()); // we need our own character class
+	if (!IsValid(LOCOCharacter)) return; // safety check
+	const FVector LocalInput = LOCOCharacter->GetActorRotation().UnrotateVector(LOCOCharacter->GetCharacterMovement()->GetCurrentAcceleration()).GetSafeNormal(); //reads the movement component's acceleration instead of the last input vector, converted to character space (X forward, Y right) and normalized); 
+	LOCOCharacter->Dodge(LocalInput.X, LocalInput.Y); // hand the two values to the character
+}
+
+

@@ -51,6 +51,8 @@ ALocomotionCharacter::ALocomotionCharacter()
 	Combat = CreateDefaultSubobject<UCombatComponent>("Combat");
 	Combat->SetIsReplicated(true);
 	
+	TurningStatus = ETurningInPlace::NotTurning;
+	
 	// Replication
 	bReplicates = true;
 
@@ -72,6 +74,56 @@ void ALocomotionCharacter::BeginPlay()
 	}
 }
 
+void ALocomotionCharacter::Dodge(float Forward, float Right)
+{
+	if (GetCharacterMovement()->IsFalling() || IsDodging()) return; // the same gate
+	UAnimMontage* Montage = GetDodgeMontage(Forward, Right); // choose the roll
+	if (!Montage) return; // nothing chosen
+	PlayAnimMontage(Montage); // play now on this machine so the owner sees no lag
+	if (!HasAuthority()) // a client must also ask the server
+	{
+		Server_Dodge(Forward, Right); // the server plays the same montage
+	}
+	else
+	{
+		Multicast_Dodge(Montage); //the host tells every client to play the same montage
+	}
+}
+
+void ALocomotionCharacter::Server_Dodge_Implementation(float Forward, float Right)
+{
+	if (GetCharacterMovement()->IsFalling() || IsDodging()) return; //the server re-checks and never trusts the client
+	if (UAnimMontage* Montage = GetDodgeMontage(Forward, Right)) //choose again on the server
+	{
+		PlayAnimMontage(Montage); // plays on server
+		Multicast_Dodge(Montage); //starts the same montage on every client so simulated proxies animate and move
+	}
+}
+
+UAnimMontage* ALocomotionCharacter::GetDodgeMontage(float Forward, float Right) const
+{
+	constexpr float Deadzone = 0.1f; // ignore tiny values
+	if (FMath::Abs(Forward) > Deadzone) // forward and back come first
+	{
+		return Forward > 0.f ? DodgeForwardMontage : DodgeBackMontage; // swap these two if your test shows them reversed
+	}
+	if (FMath::Abs(Right) > Deadzone) // otherwise use sideways
+	{
+		return Right > 0.f ? DodgeRightMontage : DodgeLeftMontage; 
+	}
+	return nullptr;
+}
+
+bool ALocomotionCharacter::IsDodging() const
+{
+	const UAnimInstance* AnimInstance = GetMesh() ? GetMesh()->GetAnimInstance() : nullptr; // get the anim instance safely
+	if (!AnimInstance) return false; // nothing to check
+	return AnimInstance->Montage_IsPlaying(DodgeForwardMontage)
+	|| AnimInstance->Montage_IsPlaying(DodgeBackMontage)
+	|| AnimInstance->Montage_IsPlaying(DodgeLeftMontage)
+	|| AnimInstance->Montage_IsPlaying(DodgeRightMontage); // true if any of the four is playing
+}
+
 FRotator ALocomotionCharacter::GetFixedAimRotation() const
 {
 	FRotator AimRotation = GetBaseAimRotation();
@@ -84,6 +136,12 @@ FRotator ALocomotionCharacter::GetFixedAimRotation() const
 	}
 	return AimRotation; //Fixed Value
 	
+}
+
+void ALocomotionCharacter::Multicast_Dodge_Implementation(UAnimMontage* Montage)
+{
+	if (HasAuthority() || IsLocallyControlled()) return; // the server and the owning player have already played it
+	PlayAnimMontage(Montage); // other players' copies play it now  
 }
 
 void ALocomotionCharacter::Input_Aim_Pressed()
@@ -110,9 +168,8 @@ void ALocomotionCharacter::CalculateTurnInPlaceParameters(float DeltaTime)
 		AO_Yaw = 0.f; // NEW: no root offset while not aiming
 		InterpAO_Yaw = 0.f; // NEW: clear any leftover interpolation
 		TurningStatus = ETurningInPlace::NotTurning; // NEW: never report a turn while not aiming
-		return; // NEW: skip the rest
-	}	
-	
+		return;
+	}
 	//Get velocity, see if its zero
 	FVector Velocity = GetVelocity();
 	Velocity.Z = 0.f;
